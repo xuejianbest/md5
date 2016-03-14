@@ -1,27 +1,97 @@
 package com.lwt.md5;
 
-public class MD5 {
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.Arrays;
 
-	public static void main(String[] args) {
-		byte[][] group = new byte[16][4];
-		for (int i = 0; i < 16; i++) {
-			for (int j = 0; j < 4; j++) {
-				group[i][j] = 0;
+public class MD5 {
+	private String content;
+	private File file;
+	private String md5;
+	
+	public MD5(String content){
+		if(content == null)
+			return;
+		this.content = content;
+	}
+	public MD5(File file){
+		if(file == null)
+			return;
+		this.file = file;
+	}
+	
+	public String md5(){
+		this.go();
+		return md5;
+	}
+	
+	private void go(){
+		int[] init = new int[]{0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
+		
+		byte[] bytes = new byte[64];
+		byte[] tail = new byte[0];
+		int len = 0;
+		long size = 0;
+		if(file != null){
+			BufferedInputStream reader = null;
+			try {
+				reader = new BufferedInputStream(new FileInputStream(file));
+				while((len = reader.read(bytes)) != -1){
+					if(len == 64){
+						init = md5_2(bytes, init);
+						size += 512;
+					}else{
+						tail = Arrays.copyOfRange(bytes, 0, len);
+						size += len * 8;
+						break;
+					}
+				}
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			} finally {
+				if(reader != null){
+					try {
+						reader.close();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
 			}
+		}else {
+			byte[] src = content.getBytes();
+			int n = src.length / 64;
+			for(int i=0; i<n; i++){
+				bytes = Arrays.copyOfRange(src, i*64, i*64+64);
+				init = md5_2(bytes, init);
+			}
+			size = src.length * 8;
+			tail = Arrays.copyOfRange(src, src.length - src.length % 64, src.length);
 		}
-		group[0][0] = 'a';
-		group[0][1] = 'b';
-		group[0][2] = 'c';
-		group[0][3] = -128;
 		
-		group[14][0] = 24;
 		
-		MD5 m = new MD5();
-		System.out.println(m.md5_2(group));
+		if(tail.length < 56){
+			bytes = Arrays.copyOf(tail, 64);
+			bytes[tail.length] = -128;
+		}else{
+			bytes = Arrays.copyOf(tail, 64);
+			bytes[tail.length] = -128;
+			init = md5_2(bytes, init);
+			bytes = Arrays.copyOf(new byte[]{}, 64);
+		}
+		for(int i=0; i<8; i++){
+			bytes[56+i] = new Long(size >>> i*8).byteValue();
+		}
+		init = md5_2(bytes, init);
+		md5 = int2string(init[0]) + int2string(init[1]) + int2string(init[2]) + int2string(init[3]);
 	}
 
-	public String md5_2(byte[][] bytes) {
-		int A = 0x67452301, B = 0xefcdab89, C = 0x98badcfe, D = 0x10325476;
+	public int[] md5_2(byte[] bytes, int[] before) {
+		int A = before[0], B = before[1], C = before[2], D = before[3];
 		int a = A, b = B, c = C, d = D;
 		int s[] = { 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
 				5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 4, 11,
@@ -57,25 +127,28 @@ public class MD5 {
 				g = 7 * i % 16;
 			}
 
-			int m = byteArrToInt(bytes[g]);
+			int m = byteArr2Int(Arrays.copyOfRange(bytes, 4*g, 4*g + 4));
 			int b_temp = b;
 			b = b + Integer.rotateLeft(a + f + m + k[i], s[i]);
 			a = d;
 			d = c;
 			c = b_temp;
 		}
-		 A += a;
-		 B += b;
-		 C += c;
-		 D += d;
+		A += a;
+		B += b;
+		C += c;
+		D += d;
 
-		 for(int i=0; i<4; i++){
-			 
-		 }
-		return int2string(A) + int2string(B) + int2string(C) + int2string(D);
+		int[] res = new int[4];
+		res[0] = A;
+		res[1] = B;
+		res[2] = C;
+		res[3] = D;
+		
+		return res;
 	}
 
-	public static String int2string(int n){
+	public String int2string(int n){
 		String res = "";
 		for(int i=0; i<4; i++){
 			String s = (Integer.toHexString((n >>> (8 * i)) & 0xff)); 
@@ -86,14 +159,45 @@ public class MD5 {
 		}
 		return res;
 	}
-	public static int byteArrToInt(byte[] bytes) {
-		byte[] setyb = new byte[4];
-		setyb[0] = bytes[3];
-		setyb[1] = bytes[2];
-		setyb[2] = bytes[1];
-		setyb[3] = bytes[0];
-		int res = new java.math.BigInteger(setyb).intValue();
+
+	private int byteArr2Int(byte[] bytes){
+		int res = 0;
+		for(int i=3; i>=0; i--){
+			res = (res << 8);
+			res += (int)bytes[i] & 0xff;
+		}
 		return res;
+	}
+	
+	
+	@Override
+	public String toString() {
+		return "MD5 [content=" + content + "]";
+	}
+
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((content == null) ? 0 : content.hashCode());
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		MD5 other = (MD5) obj;
+		if (content == null) {
+			if (other.content != null)
+				return false;
+		} else if (!content.equals(other.content))
+			return false;
+		return true;
 	}
 
 }
